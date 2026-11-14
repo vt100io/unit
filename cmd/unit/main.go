@@ -12,6 +12,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/vt100io/unit/internal/ci"
 	"github.com/vt100io/unit/internal/config"
 	"github.com/vt100io/unit/internal/deploy"
 	"github.com/vt100io/unit/internal/secrets"
@@ -43,6 +44,7 @@ func main() {
 	envFlag := env.String("e", "", "Environment to use (e.g., 'dev', 'prod')")
 	allFlag := env.Bool("all", false, "history: every app on the server, not just this one")
 	countFlag := env.Int("n", 20, "history: how many records to show")
+	skipCIFlag := env.Bool("skip-ci", false, "deploy: deploy even if the ci_check hasn't passed; the record says so")
 
 	// init-specific flags — parsed before config load since no unit.toml exists yet
 	if command == "init" {
@@ -102,6 +104,7 @@ func main() {
 	case "deploy":
 		startTime := time.Now()
 		version := getGitHash()
+		ciState := checkCI(cfg.CICheck, *skipCIFlag)
 
 		// Load secrets from script and upload them
 
@@ -155,7 +158,7 @@ func main() {
 		record := func(result string, err error) {
 			r := deploy.Record{
 				App: cfg.Name, Action: "deploy", Version: version, Previous: previous,
-				SHA256: binarySum, Who: who, From: from,
+				SHA256: binarySum, CI: ciState, Who: who, From: from,
 				Started: startTime, Finished: time.Now(), Result: result,
 			}
 			if err != nil {
@@ -318,6 +321,46 @@ func getGitHash() string {
 	}
 
 	return string(bytes.TrimSpace(out))
+}
+
+// checkCI stops the deploy unless the commit passed the check named in
+// ci_check, and returns what the deploy record should say about CI. With
+// -skip-ci it deploys anyway and says "skipped".
+func checkCI(check string, skip bool) string {
+	if check == "" {
+		return ""
+	}
+	if skip {
+		fmt.Printf("⚠️  Skipping the CI check (%s). The deploy record will say so.\n", check)
+		return "skipped"
+	}
+	stop := func(format string, args ...any) {
+		fmt.Printf("❌ "+format+"\n", args...)
+		fmt.Println("   Use -skip-ci to deploy anyway.")
+		os.Exit(1)
+	}
+	sha, err := exec.Command("git", "rev-parse", "HEAD").Output()
+	if err != nil {
+		stop("ci_check needs a git repo to know which commit to ask about.")
+	}
+	remote, err := exec.Command("git", "remote", "get-url", "origin").Output()
+	if err != nil {
+		stop("ci_check needs a remote named origin on GitHub.")
+	}
+	repo, ok := ci.RepoFromRemote(string(remote))
+	if !ok {
+		stop("ci_check only knows GitHub, and origin is %s", strings.TrimSpace(string(remote)))
+	}
+	commit := strings.TrimSpace(string(sha))
+	result, err := ci.Status(repo, commit, check)
+	if err != nil {
+		stop("Could not ask GitHub about CI: %v", err)
+	}
+	if !result.Passed() {
+		stop("%s.", result.Explain(check, commit))
+	}
+	fmt.Printf("✅ CI: %s\n", result.Explain(check, commit))
+	return result.State
 }
 
 // printUsage prints the CLI help text.

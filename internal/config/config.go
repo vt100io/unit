@@ -26,12 +26,15 @@ type ResourceConfig struct {
 
 // Config represents the application configuration loaded from unit.toml files.
 type Config struct {
-	Name         string            `toml:"name"`
-	Executable   string            `toml:"executable"`
-	Port         int               `toml:"port"`
-	Server       ServerConfig      `toml:"server"`
-	Sandbox      SandboxConfig     `toml:"sandbox"`
-	Domain       string            `toml:"domain"`
+	Name       string        `toml:"name"`
+	Executable string        `toml:"executable"`
+	Port       int           `toml:"port"`
+	Server     ServerConfig  `toml:"server"`
+	Sandbox    SandboxConfig `toml:"sandbox"`
+	Domain     string        `toml:"domain"`
+	// CICheck names the GitHub commit status that must have passed on the
+	// commit before unit deploys it, e.g. "punchcard/ci". Empty: no check.
+	CICheck      string            `toml:"ci_check"`
 	SecretScript string            `toml:"secrets"`
 	DeployPath   string            `toml:"deploy_path"`
 	Env          map[string]string `toml:"env"`

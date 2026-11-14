@@ -27,7 +27,7 @@ func TestRecordsRoundTrip(t *testing.T) {
 	for i, r := range []Record{
 		{App: "vt100", Action: "deploy", Version: "8cc5a1f", Who: "stianh@github", From: "elcap", Result: ResultLive},
 		{App: "punchcard", Action: "deploy", Version: "94172fb", Previous: "e28ef7b", Who: "stianh@github", From: "elcap", Result: ResultLive},
-		{App: "vt100", Action: "deploy", Version: "4201889", Previous: "8cc5a1f", Who: "stianh@github", From: "elcap", Result: ResultRolledBack, Error: ErrRolledBack.Error()},
+		{App: "vt100", Action: "deploy", Version: "4201889", Previous: "8cc5a1f", Who: "stianh@github", From: "elcap", Result: ResultRolledBack, CI: "skipped", Error: ErrRolledBack.Error()},
 	} {
 		r.Started = start.Add(time.Duration(i) * time.Hour)
 		r.Finished = r.Started.Add(17 * time.Second)
@@ -50,7 +50,7 @@ func TestRecordsRoundTrip(t *testing.T) {
 	if len(lines) != 3 || !strings.Contains(lines[1], "8cc5a1f → 4201889") || !strings.Contains(lines[1], "rolled-back") {
 		t.Errorf("table:\n%s", out.String())
 	}
-	if !strings.Contains(lines[1], "stianh@github") || !strings.Contains(lines[1], "17s") {
+	if !strings.Contains(lines[1], "stianh@github") || !strings.Contains(lines[1], "17s") || !strings.Contains(lines[1], "skipped") {
 		t.Errorf("newest row lacks who or duration: %s", lines[1])
 	}
 }

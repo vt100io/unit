@@ -45,7 +45,7 @@ go install github.com/vt100io/unit/cmd/unit@latest
 
 unit init --name myapp --port 8080   # scaffold a unit.toml
 unit setup -e prod                    # provision the server once
-unit deploy -e prod                   # ship and activate
+unit deploy -e prod                   # ship and activate (-skip-ci to deploy what CI hasn't passed)
 unit logs -e prod                     # stream journald output
 unit restart -e prod                  # restart without redeploying
 unit audit -e prod                    # run systemd-analyze security
@@ -160,14 +160,28 @@ This requires [Caddy](https://caddyserver.com) on the server. If you are not usi
 
 ---
 
+## CI gate
+
+Name the GitHub check a commit must have passed, and unit refuses to deploy anything else:
+
+```toml
+ci_check = "punchcard/ci"
+```
+
+Before shipping, unit asks GitHub for that check on the exact commit it deploys, the one the existing rules already require to be committed and pushed. It goes ahead only if the check passed. A failed check is refused with a link to its build log, a running one with a "deploy when it passes", a missing one with a question. `unit deploy -skip-ci` deploys anyway, and the deploy record says `skipped` where it otherwise says `success`.
+
+Public repos need no token. For private ones unit uses `GITHUB_TOKEN`, or the GitHub CLI's token if `gh` is logged in. CI never needs deploy rights: it reports on GitHub, and the deploy stays with a person.
+
+---
+
 ## Deploy records
 
-Every deploy and uninstall is recorded on the server, in `/var/log/unit/deploys.jsonl`: one JSON line with the app, the release and the one before it, the binary's SHA-256, who deployed it and from which machine, when, how long it took, and how it went (`live`, `rolled-back`, `failed` or `uninstalled`). One file holds every app on the server, and it survives an app's uninstall.
+Every deploy and uninstall is recorded on the server, in `/var/log/unit/deploys.jsonl`: one JSON line with the app, the release and the one before it, the binary's SHA-256, whether CI had passed, who deployed it and from which machine, when, how long it took, and how it went (`live`, `rolled-back`, `failed` or `uninstalled`). One file holds every app on the server, and it survives an app's uninstall.
 
 ```
 $ unit history
-WHEN              APP    VERSION            RESULT       WHO            FROM   TOOK
-2026-11-14 23:05  vt100  8cc5a1f → 4f44815  live         stianh@github  elcap  17s
+WHEN              APP    VERSION            RESULT  CI       WHO            FROM   TOOK
+2026-11-14 23:05  vt100  8cc5a1f → 4f44815  live    success  stianh@github  elcap  17s
 ```
 
 `unit history -all` shows every app on the server, `-n 50` more records. Over Tailscale SSH, *who* and *from* are the tailnet login and machine, answered by the server's own `tailscale whois`, not claimed by your laptop; without Tailscale they are your local user and host. The record is an honest log, not a tamper-proof one: whoever can deploy has sudo. It is plain JSON lines, readable by anyone on the server, for `grep`, `jq` and tools that watch servers.

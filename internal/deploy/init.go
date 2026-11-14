@@ -86,6 +86,13 @@ port = {{.Port}}
 # Caddy handles TLS automatically. Put this in unit.<env>.toml.
 # domain = "{{.Name}}.example.com"
 
+# ----------------------------------------------------------------------------
+# CI gate
+# ----------------------------------------------------------------------------
+# The GitHub commit status that must have passed on the commit before unit
+# deploys it. unit deploy -skip-ci overrides it, and the deploy record says so.
+# ci_check = "punchcard/ci"
+
 
 # ----------------------------------------------------------------------------
 # Secrets

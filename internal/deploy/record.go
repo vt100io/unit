@@ -44,6 +44,7 @@ type Record struct {
 	Version  string    `json:"version,omitempty"`  // the release: the commit's short hash
 	Previous string    `json:"previous,omitempty"` // the release that ran before
 	SHA256   string    `json:"sha256,omitempty"`   // of the binary shipped
+	CI       string    `json:"ci,omitempty"`       // the CI check's state when deployed, or "skipped"
 	Who      string    `json:"who"`                // tailnet login, or local user@host without Tailscale
 	From     string    `json:"from,omitempty"`     // the tailnet machine it came from
 	Started  time.Time `json:"started"`
@@ -153,7 +154,7 @@ func PrintRecords(w io.Writer, records []Record, n int) {
 		return
 	}
 	tw := tabwriter.NewWriter(w, 0, 0, 2, ' ', 0)
-	fmt.Fprintln(tw, "WHEN\tAPP\tVERSION\tRESULT\tWHO\tFROM\tTOOK")
+	fmt.Fprintln(tw, "WHEN\tAPP\tVERSION\tRESULT\tCI\tWHO\tFROM\tTOOK")
 	for i := len(records) - 1; i >= 0 && i >= len(records)-n; i-- {
 		r := records[i]
 		version := r.Version
@@ -161,12 +162,11 @@ func PrintRecords(w io.Writer, records []Record, n int) {
 			version = r.Previous + " → " + r.Version
 		}
 		took := r.Finished.Sub(r.Started).Round(time.Second).String()
-		result := r.Result
 		if r.Action == "uninstall" {
 			version = "-"
 		}
-		fmt.Fprintf(tw, "%s\t%s\t%s\t%s\t%s\t%s\t%s\n",
-			r.Started.Local().Format("2006-01-02 15:04"), r.App, orDash(version), result, r.Who, orDash(r.From), took)
+		fmt.Fprintf(tw, "%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n",
+			r.Started.Local().Format("2006-01-02 15:04"), r.App, orDash(version), r.Result, orDash(r.CI), r.Who, orDash(r.From), took)
 	}
 	tw.Flush()
 }
