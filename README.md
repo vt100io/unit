@@ -160,6 +160,22 @@ This requires [Caddy](https://caddyserver.com) on the server. If you are not usi
 
 ---
 
+## Why deploy from a laptop?
+
+Most teams deploy from their CI pipeline, and for good reasons. With many developers, CI keeps production access off fifty laptops and puts it in one controlled place. Every deploy follows the same path and leaves a trail, and deploys don't wait for anyone to be at a desk. It is safe there because hosted CI runs each job on a fresh, isolated machine with short-lived credentials scoped to that job, often behind a required approval for production.
+
+unit deploys from wherever you run it, and I run it from my laptop:
+
+- **There is one of me.** "Keep production access off developer laptops" doesn't apply when the developer is the admin; my laptop can reach the servers anyway.
+- **My CI isn't isolated, on purpose.** [Punchcard](https://github.com/vt100io/punchcard) keeps a warm workspace per repo on one machine, which is what makes it fast. It also means every build runs as the same user, so deploy rights given to CI would be given to every build, including whatever a dependency does during one.
+- **A person is there when a deploy goes wrong.** unit rolls back a version that fails its health check. One that starts but is wrong needs someone watching.
+
+I keep what CI deploys are good at. The [CI gate](#ci-gate) deploys only commits CI has passed, and [deploy records](#deploy-records) log who deployed what, when, and how it went. CI builds and tests; a person presses the button; the tools do the rest.
+
+I'd move deploys into CI the day a second person should deploy without being root on the servers, deploys must happen while nobody is around, or there are many a day. Then it should be done properly: each build in its own sandbox, a deploy identity no build can read, and deploys only from the default branch after CI passes.
+
+---
+
 ## CI gate
 
 Name the GitHub check a commit must have passed, and unit refuses to deploy anything else:
