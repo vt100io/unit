@@ -4,6 +4,7 @@ package ci
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"os"
@@ -54,14 +55,31 @@ func statePast(state string) string {
 }
 
 // Status returns the latest state of the commit status named check on sha
-// in repo ("owner/name").
+// in repo ("owner/name"). It tries each token it can find, then none: a
+// stale token GitHub rejects shouldn't block a public repo.
 func Status(repo, sha, check string) (Result, error) {
+	var lastErr error
+	for _, t := range tokens() {
+		r, err := status(repo, sha, check, t.value)
+		if err == errUnauthorized {
+			fmt.Printf("⚠️  GitHub rejected the token from %s; trying the next way to ask.\n", t.source)
+			lastErr = fmt.Errorf("GitHub rejected the token from %s", t.source)
+			continue
+		}
+		return r, err
+	}
+	return Result{}, lastErr
+}
+
+var errUnauthorized = errors.New("401 Unauthorized")
+
+func status(repo, sha, check, token string) (Result, error) {
 	req, err := http.NewRequest(http.MethodGet, fmt.Sprintf("%s/repos/%s/commits/%s/status", API, repo, sha), nil)
 	if err != nil {
 		return Result{}, err
 	}
 	req.Header.Set("Accept", "application/vnd.github+json")
-	if token := token(); token != "" {
+	if token != "" {
 		req.Header.Set("Authorization", "Bearer "+token)
 	}
 	resp, err := (&http.Client{Timeout: 15 * time.Second}).Do(req)
@@ -69,8 +87,11 @@ func Status(repo, sha, check string) (Result, error) {
 		return Result{}, err
 	}
 	defer resp.Body.Close()
+	if resp.StatusCode == http.StatusUnauthorized && token != "" {
+		return Result{}, errUnauthorized
+	}
 	if resp.StatusCode != http.StatusOK {
-		return Result{}, fmt.Errorf("GitHub returned %s for %s (a private repo needs GITHUB_TOKEN or gh auth login)", resp.Status, repo)
+		return Result{}, fmt.Errorf("GitHub returned %s for %s (a private repo needs a valid GITHUB_TOKEN or gh auth login)", resp.Status, repo)
 	}
 	// The combined status lists the latest status for each context.
 	var combined struct {
@@ -91,16 +112,23 @@ func Status(repo, sha, check string) (Result, error) {
 	return Result{}, nil
 }
 
-// token is GITHUB_TOKEN, or the GitHub CLI's token if it is logged in, or
-// nothing: public repos need none.
-func token() string {
+type token struct{ source, value string }
+
+// tokens are the ways to ask GitHub, in order: GITHUB_TOKEN, the GitHub
+// CLI's token if it is logged in, and no token, which is enough for public
+// repos.
+func tokens() []token {
+	var ts []token
 	if t := os.Getenv("GITHUB_TOKEN"); t != "" {
-		return t
+		ts = append(ts, token{"GITHUB_TOKEN", t})
 	}
 	if out, err := exec.Command("gh", "auth", "token").Output(); err == nil {
-		return strings.TrimSpace(string(out))
+		// gh hands out GITHUB_TOKEN itself when it is set; don't ask twice.
+		if t := strings.TrimSpace(string(out)); t != "" && t != os.Getenv("GITHUB_TOKEN") {
+			ts = append(ts, token{"gh auth token", t})
+		}
 	}
-	return ""
+	return append(ts, token{"no token", ""})
 }
 
 var githubRemote = regexp.MustCompile(`github\.com[:/]([^/]+/[^/]+?)(\.git)?/?$`)

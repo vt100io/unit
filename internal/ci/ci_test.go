@@ -39,6 +39,7 @@ func TestStatus(t *testing.T) {
 	API = srv.URL
 	defer func() { API = old }()
 	t.Setenv("GITHUB_TOKEN", "test")
+	t.Setenv("PATH", t.TempDir()) // no gh
 
 	r, err := Status("vt100io/unit", "abc123", "punchcard/ci")
 	if err != nil || !r.Passed() || r.URL != "https://punchcard.vt100.io/builds/x" {
@@ -49,6 +50,27 @@ func TestStatus(t *testing.T) {
 	}
 	if _, err := Status("vt100io/nope", "abc123", "punchcard/ci"); err == nil {
 		t.Error("a 404 must be an error")
+	}
+}
+
+// A stale token GitHub rejects falls back to asking without one.
+func TestStatusRejectedToken(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Header.Get("Authorization") != "" {
+			w.WriteHeader(http.StatusUnauthorized)
+			return
+		}
+		w.Write([]byte(`{"statuses":[{"context":"punchcard/ci","state":"success"}]}`))
+	}))
+	defer srv.Close()
+	old := API
+	API = srv.URL
+	defer func() { API = old }()
+	t.Setenv("GITHUB_TOKEN", "stale")
+	t.Setenv("PATH", t.TempDir()) // no gh
+
+	if r, err := Status("vt100io/unit", "abc123", "punchcard/ci"); err != nil || !r.Passed() {
+		t.Errorf("got %+v %v, want a pass asked without the token", r, err)
 	}
 }
 
