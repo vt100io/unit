@@ -28,6 +28,7 @@ unit starts from a default-deny security posture and you whitelist what the app 
 |---|---|---|
 | Outbound network | **Denied** | `allow_outbound_network = true` |
 | Filesystem writes | **Denied** | `state_directory`, `logs_directory`, `writable_paths` |
+| Running programs from state | **Denied** (noexec) | `allow_state_exec = true` |
 | Capabilities | **None** | not configurable — empty by default |
 | Inbound connections | Socket activation | `port = <n>` |
 | Secrets | Credential files | `secrets = "./secrets.sh"` |

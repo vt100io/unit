@@ -73,7 +73,9 @@ PrivateUsers=yes
 # Persistent storage at /var/lib/{{.Name}}, owned by DynamicUser.
 # Accessible at runtime via $STATE_DIRECTORY.
 StateDirectory={{.Name}}
-{{end}}
+{{if .Sandbox.AllowStateExec}}# Programs installed under it may run; systemd mounts it noexec otherwise.
+ExecPaths=/var/lib/{{.Name}}
+{{end}}{{end}}
 {{if .Sandbox.LogsDirectory}}
 # Log directory at /var/log/{{.Name}}, owned by DynamicUser.
 # Accessible at runtime via $LOGS_DIRECTORY.
@@ -162,7 +164,8 @@ PrivateUsers=yes
 
 {{if .Sandbox.StateDirectory}}
 StateDirectory={{.Name}}
-{{end}}
+{{if .Sandbox.AllowStateExec}}ExecPaths=/var/lib/{{.Name}}
+{{end}}{{end}}
 {{if .Sandbox.LogsDirectory}}
 LogsDirectory={{.Name}}
 {{end}}

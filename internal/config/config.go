@@ -81,6 +81,11 @@ type SandboxConfig struct {
 	// Required for runtimes that use JIT compilation (e.g. DuckDB via LLVM,
 	// LuaJIT, V8) which need mmap(PROT_WRITE|PROT_EXEC).
 	AllowWriteExecute bool `toml:"allow_write_execute"`
+	// AllowStateExec lets the service run programs it put in its state
+	// directory, via ExecPaths=. systemd 257 (Debian 13) mounts a
+	// DynamicUser state directory noexec, so without it a CI server that
+	// installs toolchains there gets "Permission denied" running them.
+	AllowStateExec bool `toml:"allow_state_exec"`
 }
 
 // ServerConfig represents the SSH server configuration for deployment.

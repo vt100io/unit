@@ -113,6 +113,11 @@ allow_outbound_network = false
 # Survives restarts and redeployments. Accessible at runtime via $STATE_DIRECTORY.
 # state_directory = false
 
+# Let the service run programs it installs in its state directory, such as
+# toolchains a CI server downloads. systemd mounts the directory noexec
+# otherwise. Needs state_directory.
+# allow_state_exec = false
+
 # Log directory at /var/log/{{.Name}}, owned by the service user.
 # Accessible at runtime via $LOGS_DIRECTORY.
 # logs_directory = false
