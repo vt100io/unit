@@ -222,7 +222,7 @@ func triggerSystemd(client *ssh.Client, cfg *config.Config, version string) erro
 			return fmt.Errorf("fatal: automatic rollback failed: %w\n---\n%s---", err, string(output))
 		}
 		fmt.Println("✅ Rollback successful. Previous version restored.")
-		return fmt.Errorf("deployment failed, but Unit restored the previous version")
+		return ErrRolledBack
 	}
 
 	// 2. Perform the Swap and Restart

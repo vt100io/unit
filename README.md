@@ -49,6 +49,7 @@ unit deploy -e prod                   # ship and activate
 unit logs -e prod                     # stream journald output
 unit restart -e prod                  # restart without redeploying
 unit audit -e prod                    # run systemd-analyze security
+unit history -e prod                  # who deployed what, when, and how it went
 unit uninstall -e prod                # remove everything
 ```
 
@@ -156,6 +157,20 @@ domain = "api.example.com"
 ```
 
 This requires [Caddy](https://caddyserver.com) on the server. If you are not using Caddy, omit `domain =` and handle TLS separately.
+
+---
+
+## Deploy records
+
+Every deploy and uninstall is recorded on the server, in `/var/log/unit/deploys.jsonl`: one JSON line with the app, the release and the one before it, the binary's SHA-256, who deployed it and from which machine, when, how long it took, and how it went (`live`, `rolled-back`, `failed` or `uninstalled`). One file holds every app on the server, and it survives an app's uninstall.
+
+```
+$ unit history
+WHEN              APP    VERSION            RESULT       WHO            FROM   TOOK
+2026-11-14 23:05  vt100  8cc5a1f → 4f44815  live         stianh@github  elcap  17s
+```
+
+`unit history -all` shows every app on the server, `-n 50` more records. Over Tailscale SSH, *who* and *from* are the tailnet login and machine, answered by the server's own `tailscale whois`, not claimed by your laptop; without Tailscale they are your local user and host. The record is an honest log, not a tamper-proof one: whoever can deploy has sudo. It is plain JSON lines, readable by anyone on the server, for `grep`, `jq` and tools that watch servers.
 
 ---
 

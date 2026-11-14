@@ -3,6 +3,7 @@ package main
 
 import (
 	"bytes"
+	"errors"
 	"flag"
 	"fmt"
 	"log"
@@ -40,6 +41,8 @@ func main() {
 	// Define and parse flags from the remaining arguments
 	env := flag.NewFlagSet(command, flag.ExitOnError)
 	envFlag := env.String("e", "", "Environment to use (e.g., 'dev', 'prod')")
+	allFlag := env.Bool("all", false, "history: every app on the server, not just this one")
+	countFlag := env.Int("n", 20, "history: how many records to show")
 
 	// init-specific flags — parsed before config load since no unit.toml exists yet
 	if command == "init" {
@@ -144,9 +147,27 @@ func main() {
 			}
 		}
 
+		// Every deploy from here on is recorded on the server, whatever
+		// its outcome: who, what, when, and how it went.
+		binarySum, _ := deploy.FileSHA256(cfg.Executable)
+		who, from := deploy.Identify(client)
+		previous := deploy.CurrentRelease(client, cfg.DeployPath, cfg.Name)
+		record := func(result string, err error) {
+			r := deploy.Record{
+				App: cfg.Name, Action: "deploy", Version: version, Previous: previous,
+				SHA256: binarySum, Who: who, From: from,
+				Started: startTime, Finished: time.Now(), Result: result,
+			}
+			if err != nil {
+				r.Error = err.Error()
+			}
+			deploy.AppendRecord(client, r)
+		}
+
 		// 2. Ship the binary
 		err = deploy.Ship(client, cfg, version)
 		if err != nil {
+			record(deploy.ResultFailed, err)
 			log.Fatal(err)
 		}
 
@@ -160,9 +181,15 @@ func main() {
 			os.Exit(1)
 		}
 		if err != nil {
+			result := deploy.ResultFailed
+			if errors.Is(err, deploy.ErrRolledBack) {
+				result = deploy.ResultRolledBack
+			}
+			record(result, err)
 			fmt.Printf("❌ Activation failed: %v\n", err)
 			os.Exit(1)
 		}
+		record(deploy.ResultLive, nil)
 		fmt.Println("✅ Ship successful.")
 
 		if cfg.Domain != "" {
@@ -216,10 +243,28 @@ func main() {
 		}
 		fmt.Println("✅ Audit complete.")
 	case "uninstall":
+		started := time.Now()
+		previous := deploy.CurrentRelease(client, cfg.DeployPath, cfg.Name)
 		if err := deploy.Teardown(client, cfg); err != nil {
 			fmt.Printf("❌ Teardown failed: %v\n", err)
 			os.Exit(1)
 		}
+		who, from := deploy.Identify(client)
+		deploy.AppendRecord(client, deploy.Record{
+			App: cfg.Name, Action: "uninstall", Previous: previous, Who: who, From: from,
+			Started: started, Finished: time.Now(), Result: deploy.ResultUninstalled,
+		})
+	case "history":
+		app := cfg.Name
+		if *allFlag {
+			app = ""
+		}
+		records, err := deploy.ReadRecords(client, app)
+		if err != nil {
+			fmt.Printf("❌ Could not read the deploy log: %v\n", err)
+			os.Exit(1)
+		}
+		deploy.PrintRecords(os.Stdout, records, *countFlag)
 	case "restart":
 		target := cfg.Name
 		fmt.Printf("🔄 Restarting %s.service on %s...\n", target, cfg.Server.Host)
@@ -285,6 +330,7 @@ func printUsage() {
 	fmt.Println("  audit      Run a security audit of the systemd service")
 	fmt.Println("  restart    Restart the service on the remote server")
 	fmt.Println("  logs       Stream service logs")
+	fmt.Println("  history    Show who deployed what, when (-all for every app on the server, -n count)")
 	fmt.Println("  uninstall  Completely remove the app, services, and configurations from the server")
 }
 
