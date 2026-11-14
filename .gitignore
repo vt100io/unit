@@ -1,0 +1,9 @@
+bin/
+dist/
+/unit
+CLAUDE.md
+
+# Environment override files contain server addresses and secret script paths.
+# Commit unit.example.toml as a template; keep real env files local.
+unit.*.toml
+!unit.example.toml

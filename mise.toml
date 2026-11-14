@@ -1,0 +1,6 @@
+[tools]
+go = "1.27.4"
+
+[tasks.ci]
+description = "What Punchcard runs on push and PR"
+run = "make check build"
