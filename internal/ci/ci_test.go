@@ -32,7 +32,8 @@ func TestStatus(t *testing.T) {
 		}
 		w.Write([]byte(`{"state":"failure","statuses":[
 			{"context":"other/lint","state":"failure"},
-			{"context":"punchcard/ci","state":"success","target_url":"https://punchcard.vt100.io/builds/x"}]}`))
+			{"context":"punchcard/ci","state":"success","target_url":"https://punchcard.vt100.io/builds/x"},
+			{"context":"punchcard/sha256 bin/unit","state":"success","description":"2cf24dba"}]}`))
 	}))
 	defer srv.Close()
 	old := API
@@ -44,6 +45,9 @@ func TestStatus(t *testing.T) {
 	r, err := Status("vt100io/unit", "abc123", "punchcard/ci")
 	if err != nil || !r.Passed() || r.URL != "https://punchcard.vt100.io/builds/x" {
 		t.Errorf("punchcard/ci: %+v %v", r, err)
+	}
+	if r, _ := Status("vt100io/unit", "abc123", "punchcard/sha256 bin/unit"); r.Description != "2cf24dba" {
+		t.Errorf("checksum status: %+v", r)
 	}
 	if r, _ := Status("vt100io/unit", "abc123", "missing/check"); r.Passed() || r.State != "" {
 		t.Errorf("missing check: %+v", r)

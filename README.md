@@ -186,6 +186,23 @@ ci_check = "punchcard/ci"
 
 Before shipping, unit asks GitHub for that check on the exact commit it deploys, the one the existing rules already require to be committed and pushed. It goes ahead only if the check passed. A failed check is refused with a link to its build log, a running one with a "deploy when it passes", a missing one with a question. `unit deploy -skip-ci` deploys anyway, and the deploy record says `skipped` where it otherwise says `success`.
 
+### The same binary CI built
+
+A passing check says the *commit* is good, but the binary you ship is built again on your machine. With a reproducible build, both builds give the same bytes, and unit can prove it:
+
+```toml
+ci_check    = "punchcard/ci"
+ci_checksum = "punchcard/sha256"
+```
+
+[Punchcard](https://github.com/vt100io/punchcard) publishes the SHA-256 of each binary a passing build writes to `bin/`, as a commit status named `punchcard/sha256 bin/<name>`. unit compares it with the binary it is about to ship and refuses if they differ, showing both checksums. The deploy record and `unit history` say `same as CI`. Two independent builds have to agree, so neither a compromised CI nor a compromised laptop can slip in a binary alone.
+
+Go builds are reproducible with the same Go version (pin it with mise), the same `go.sum`, `CGO_ENABLED=0` and `-trimpath`, which leaves the build directory's path out of the binary:
+
+```sh
+CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -trimpath -o bin/app .
+```
+
 Public repos need no token. For private ones unit uses `GITHUB_TOKEN`, or the GitHub CLI's token if `gh` is logged in. CI never needs deploy rights: it reports on GitHub, and the deploy stays with a person.
 
 ---
@@ -196,8 +213,8 @@ Every deploy and uninstall is recorded on the server, in `/var/log/unit/deploys.
 
 ```
 $ unit history
-WHEN              APP    VERSION            RESULT  CI       WHO            FROM   TOOK
-2026-11-14 23:05  vt100  8cc5a1f → 4f44815  live    success  stianh@github  elcap  17s
+WHEN              APP    VERSION            RESULT  CI       BINARY      WHO            FROM   TOOK
+2026-11-14 23:05  vt100  8cc5a1f → 4f44815  live    success  same as CI  stianh@github  elcap  17s
 ```
 
 `unit history -all` shows every app on the server, `-n 50` more records. Over Tailscale SSH, *who* and *from* are the tailnet login and machine, answered by the server's own `tailscale whois`, not claimed by your laptop; without Tailscale they are your local user and host. The record is an honest log, not a tamper-proof one: whoever can deploy has sudo. It is plain JSON lines, readable by anyone on the server, for `grep`, `jq` and tools that watch servers.

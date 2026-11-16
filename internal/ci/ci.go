@@ -19,8 +19,9 @@ var API = "https://api.github.com"
 
 // Result is the state of one check on one commit.
 type Result struct {
-	State string // success, failure, error, pending, or "" when the check is missing
-	URL   string // the build log, if the check links one
+	State       string // success, failure, error, pending, or "" when the check is missing
+	URL         string // the build log, if the check links one
+	Description string // the check's one-line text, e.g. a checksum
 }
 
 // Passed reports whether the check passed.
@@ -96,9 +97,10 @@ func status(repo, sha, check, token string) (Result, error) {
 	// The combined status lists the latest status for each context.
 	var combined struct {
 		Statuses []struct {
-			Context   string `json:"context"`
-			State     string `json:"state"`
-			TargetURL string `json:"target_url"`
+			Context     string `json:"context"`
+			State       string `json:"state"`
+			TargetURL   string `json:"target_url"`
+			Description string `json:"description"`
 		} `json:"statuses"`
 	}
 	if err := json.NewDecoder(resp.Body).Decode(&combined); err != nil {
@@ -106,7 +108,7 @@ func status(repo, sha, check, token string) (Result, error) {
 	}
 	for _, s := range combined.Statuses {
 		if s.Context == check {
-			return Result{State: s.State, URL: s.TargetURL}, nil
+			return Result{State: s.State, URL: s.TargetURL, Description: s.Description}, nil
 		}
 	}
 	return Result{}, nil

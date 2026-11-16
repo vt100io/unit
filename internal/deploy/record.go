@@ -40,13 +40,14 @@ var ErrRolledBack = errors.New("deployment failed, but Unit restored the previou
 // not a tamper-proof one: whoever can deploy has sudo and could edit it.
 type Record struct {
 	App      string    `json:"app"`
-	Action   string    `json:"action"`             // "deploy" or "uninstall"
-	Version  string    `json:"version,omitempty"`  // the release: the commit's short hash
-	Previous string    `json:"previous,omitempty"` // the release that ran before
-	SHA256   string    `json:"sha256,omitempty"`   // of the binary shipped
-	CI       string    `json:"ci,omitempty"`       // the CI check's state when deployed, or "skipped"
-	Who      string    `json:"who"`                // tailnet login, or local user@host without Tailscale
-	From     string    `json:"from,omitempty"`     // the tailnet machine it came from
+	Action   string    `json:"action"`               // "deploy" or "uninstall"
+	Version  string    `json:"version,omitempty"`    // the release: the commit's short hash
+	Previous string    `json:"previous,omitempty"`   // the release that ran before
+	SHA256   string    `json:"sha256,omitempty"`     // of the binary shipped
+	CI       string    `json:"ci,omitempty"`         // the CI check's state when deployed, or "skipped"
+	SameAsCI bool      `json:"same_as_ci,omitempty"` // the binary was byte-identical to the one CI built
+	Who      string    `json:"who"`                  // tailnet login, or local user@host without Tailscale
+	From     string    `json:"from,omitempty"`       // the tailnet machine it came from
 	Started  time.Time `json:"started"`
 	Finished time.Time `json:"finished"`
 	Result   string    `json:"result"`
@@ -154,7 +155,7 @@ func PrintRecords(w io.Writer, records []Record, n int) {
 		return
 	}
 	tw := tabwriter.NewWriter(w, 0, 0, 2, ' ', 0)
-	fmt.Fprintln(tw, "WHEN\tAPP\tVERSION\tRESULT\tCI\tWHO\tFROM\tTOOK")
+	fmt.Fprintln(tw, "WHEN\tAPP\tVERSION\tRESULT\tCI\tBINARY\tWHO\tFROM\tTOOK")
 	for i := len(records) - 1; i >= 0 && i >= len(records)-n; i-- {
 		r := records[i]
 		version := r.Version
@@ -165,8 +166,12 @@ func PrintRecords(w io.Writer, records []Record, n int) {
 		if r.Action == "uninstall" {
 			version = "-"
 		}
-		fmt.Fprintf(tw, "%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n",
-			r.Started.Local().Format("2006-01-02 15:04"), r.App, orDash(version), r.Result, orDash(r.CI), r.Who, orDash(r.From), took)
+		binary := "-"
+		if r.SameAsCI {
+			binary = "same as CI"
+		}
+		fmt.Fprintf(tw, "%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n",
+			r.Started.Local().Format("2006-01-02 15:04"), r.App, orDash(version), r.Result, orDash(r.CI), binary, r.Who, orDash(r.From), took)
 	}
 	tw.Flush()
 }

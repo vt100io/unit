@@ -34,7 +34,12 @@ type Config struct {
 	Domain     string        `toml:"domain"`
 	// CICheck names the GitHub commit status that must have passed on the
 	// commit before unit deploys it, e.g. "punchcard/ci". Empty: no check.
-	CICheck      string            `toml:"ci_check"`
+	CICheck string `toml:"ci_check"`
+	// CIChecksum names the commit statuses in which CI publishes each
+	// binary's SHA-256, followed by the binary's path: "punchcard/sha256"
+	// means "punchcard/sha256 bin/app". unit then deploys only a binary
+	// byte-identical to the one CI built. Needs ci_check.
+	CIChecksum   string            `toml:"ci_checksum"`
 	SecretScript string            `toml:"secrets"`
 	DeployPath   string            `toml:"deploy_path"`
 	Env          map[string]string `toml:"env"`

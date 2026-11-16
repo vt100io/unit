@@ -92,6 +92,11 @@ port = {{.Port}}
 # The GitHub commit status that must have passed on the commit before unit
 # deploys it. unit deploy -skip-ci overrides it, and the deploy record says so.
 # ci_check = "punchcard/ci"
+#
+# Deploy only a binary byte-identical to the one CI built, from the checksum
+# CI publishes as the status "<ci_checksum> <executable>". Needs a
+# reproducible build: go build -trimpath.
+# ci_checksum = "punchcard/sha256"
 
 
 # ----------------------------------------------------------------------------

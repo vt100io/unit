@@ -9,6 +9,7 @@ import (
 	"log"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -104,7 +105,7 @@ func main() {
 	case "deploy":
 		startTime := time.Now()
 		version := getGitHash()
-		ciState := checkCI(cfg.CICheck, *skipCIFlag)
+		ciState, sameAsCI := checkCI(cfg, *skipCIFlag)
 
 		// Load secrets from script and upload them
 
@@ -158,7 +159,7 @@ func main() {
 		record := func(result string, err error) {
 			r := deploy.Record{
 				App: cfg.Name, Action: "deploy", Version: version, Previous: previous,
-				SHA256: binarySum, CI: ciState, Who: who, From: from,
+				SHA256: binarySum, CI: ciState, SameAsCI: sameAsCI, Who: who, From: from,
 				Started: startTime, Finished: time.Now(), Result: result,
 			}
 			if err != nil {
@@ -324,15 +325,17 @@ func getGitHash() string {
 }
 
 // checkCI stops the deploy unless the commit passed the check named in
-// ci_check, and returns what the deploy record should say about CI. With
+// ci_check and, with ci_checksum, unless the binary is byte-identical to the
+// one CI built. It returns what the deploy record says about CI. With
 // -skip-ci it deploys anyway and says "skipped".
-func checkCI(check string, skip bool) string {
+func checkCI(cfg *config.Config, skip bool) (state string, sameAsCI bool) {
+	check := cfg.CICheck
 	if check == "" {
-		return ""
+		return "", false
 	}
 	if skip {
 		fmt.Printf("⚠️  Skipping the CI check (%s). The deploy record will say so.\n", check)
-		return "skipped"
+		return "skipped", false
 	}
 	stop := func(format string, args ...any) {
 		fmt.Printf("❌ "+format+"\n", args...)
@@ -360,7 +363,28 @@ func checkCI(check string, skip bool) string {
 		stop("%s.", result.Explain(check, commit))
 	}
 	fmt.Printf("✅ CI: %s\n", result.Explain(check, commit))
-	return result.State
+	if cfg.CIChecksum == "" {
+		return result.State, false
+	}
+
+	// The binary here must be the one CI built: same commit, same bytes.
+	binary := filepath.ToSlash(filepath.Clean(cfg.Executable))
+	published, err := ci.Status(repo, commit, cfg.CIChecksum+" "+binary)
+	if err != nil {
+		stop("Could not ask GitHub for CI's checksum: %v", err)
+	}
+	if published.Description == "" {
+		stop("CI published no checksum for %s on %s (%s %s).", binary, commit[:7], cfg.CIChecksum, binary)
+	}
+	local, err := deploy.FileSHA256(cfg.Executable)
+	if err != nil {
+		stop("Could not read %s: %v", binary, err)
+	}
+	if local != published.Description {
+		stop("%s is not the binary CI built for %s.\n   here: %s\n   CI:   %s\n   Build it again from this commit. If it still differs, the build isn't reproducible: build with go build -trimpath.", binary, commit[:7], local, published.Description)
+	}
+	fmt.Printf("✅ Binary: %s is byte-identical to the one CI built (sha256 %s…)\n", binary, local[:12])
+	return result.State, true
 }
 
 // printUsage prints the CLI help text.
