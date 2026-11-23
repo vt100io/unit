@@ -94,6 +94,11 @@ type SandboxConfig struct {
 	// DynamicUser state directory noexec, so without it a CI server that
 	// installs toolchains there gets "Permission denied" running them.
 	AllowStateExec bool `toml:"allow_state_exec"`
+	// AllowSystemStats removes ProcSubset=pid, so the service can read
+	// system-wide files in /proc such as loadavg, meminfo and stat. Other
+	// processes stay hidden (ProtectProc=invisible). For monitoring tools
+	// that report on the machine they run on.
+	AllowSystemStats bool `toml:"allow_system_stats"`
 }
 
 // ServerConfig represents the SSH server configuration for deployment.

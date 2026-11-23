@@ -31,3 +31,21 @@ func TestAllowStateExec(t *testing.T) {
 		}
 	}
 }
+
+// ProcSubset=pid hides /proc/loadavg, /proc/meminfo and /proc/stat; a
+// monitoring tool needs them, and only it should get them.
+func TestAllowSystemStats(t *testing.T) {
+	for _, allow := range []bool{false, true} {
+		sandbox := config.SandboxConfig{AllowSystemStats: allow}
+		service := render(t, ServiceTemplate, &config.Config{Name: "stats", Executable: "bin/stats", Sandbox: sandbox})
+		job := render(t, JobServiceTemplate, jobTemplateData{Name: "stats", Sandbox: sandbox, Job: config.JobConfig{Command: "report"}})
+		for name, unit := range map[string]string{"service": service, "job": job} {
+			if got := strings.Contains(unit, "ProcSubset=pid"); got == allow {
+				t.Errorf("%s with allow_system_stats=%v: ProcSubset=pid present = %v", name, allow, got)
+			}
+			if !strings.Contains(unit, "ProtectProc=invisible") {
+				t.Errorf("%s with allow_system_stats=%v: ProtectProc=invisible missing", name, allow)
+			}
+		}
+	}
+}

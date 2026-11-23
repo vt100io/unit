@@ -58,7 +58,7 @@ ReadWritePaths={{.}}
 
 UMask=0077
 ProtectProc=invisible
-ProcSubset=pid
+{{if not .Sandbox.AllowSystemStats}}ProcSubset=pid{{end}}
 # Prevents switching to non-native system call architectures
 SystemCallArchitectures=native
 # Prevents the app from changing the system hostname
@@ -156,7 +156,7 @@ ReadWritePaths={{.}}
 
 UMask=0077
 ProtectProc=invisible
-ProcSubset=pid
+{{if not .Sandbox.AllowSystemStats}}ProcSubset=pid{{end}}
 SystemCallArchitectures=native
 ProtectHostname=yes
 RestrictRealtime=yes
