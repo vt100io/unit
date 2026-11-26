@@ -141,6 +141,7 @@ func main() {
 		fmt.Printf("    Name:       %s\n", cfg.Name)
 		fmt.Printf("    Executable: %s\n", cfg.Executable)
 		fmt.Printf("    Port:       %d\n", cfg.Port)
+		fmt.Printf("    Listen:     %s\n", cfg.Listen)
 		fmt.Printf("    Server:     %s@%s\n", cfg.Server.User, cfg.Server.Host)
 		fmt.Printf("    Domain:     %s\n", cfg.Domain)
 		fmt.Printf("    Secrets script:  %s\n", cfg.SecretScript)

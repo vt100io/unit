@@ -26,12 +26,15 @@ type ResourceConfig struct {
 
 // Config represents the application configuration loaded from unit.toml files.
 type Config struct {
-	Name       string        `toml:"name"`
-	Executable string        `toml:"executable"`
-	Port       int           `toml:"port"`
-	Server     ServerConfig  `toml:"server"`
-	Sandbox    SandboxConfig `toml:"sandbox"`
-	Domain     string        `toml:"domain"`
+	Name       string `toml:"name"`
+	Executable string `toml:"executable"`
+	Port       int    `toml:"port"`
+	// Listen says where the port is reachable: ListenLocalhost (the
+	// default), ListenTailnet or ListenAll. See the constants.
+	Listen  string        `toml:"listen"`
+	Server  ServerConfig  `toml:"server"`
+	Sandbox SandboxConfig `toml:"sandbox"`
+	Domain  string        `toml:"domain"`
 	// CICheck names the GitHub commit status that must have passed on the
 	// commit before unit deploys it, e.g. "punchcard/ci". Empty: no check.
 	CICheck string `toml:"ci_check"`
@@ -47,6 +50,34 @@ type Config struct {
 	Jobs         []JobConfig       `toml:"jobs"`
 	Resources    ResourceConfig    `toml:"resources"`
 	DependsOn    DependsOnConfig   `toml:"depends_on"`
+}
+
+// Where a service's port is reachable.
+const (
+	// ListenLocalhost binds 127.0.0.1 only: Caddy, on the same machine, is
+	// the one way in. The default.
+	ListenLocalhost = "localhost"
+	// ListenTailnet binds the tailscale0 interface only, for a service
+	// meant for the tailnet and nothing else. It can't have a domain.
+	ListenTailnet = "tailnet"
+	// ListenAll binds every interface, the public one too: only a cloud
+	// firewall then stands between the port and the internet.
+	ListenAll = "all"
+)
+
+// validate fills in defaults and rejects settings that can't work together.
+func (c *Config) validate() error {
+	switch c.Listen {
+	case "":
+		c.Listen = ListenLocalhost
+	case ListenLocalhost, ListenTailnet, ListenAll:
+	default:
+		return fmt.Errorf("listen = %q: want %q, %q or %q", c.Listen, ListenLocalhost, ListenTailnet, ListenAll)
+	}
+	if c.Domain != "" && c.Listen == ListenTailnet {
+		return fmt.Errorf("listen = %q and a domain: Caddy reaches the app on 127.0.0.1, which a tailnet-only port doesn't listen on", ListenTailnet)
+	}
+	return nil
 }
 
 // DependsOnConfig controls systemd ordering and dependency declarations.
@@ -139,6 +170,9 @@ func Load(env string) (*Config, error) {
 		if err != nil {
 			if os.IsNotExist(err) {
 				fmt.Fprintf(os.Stderr, "⚠️  Warning: Environment override file '%s' not found. Continuing with base configuration only.\n", envFilename)
+				if err := cfg.validate(); err != nil {
+					return nil, err
+				}
 				return &cfg, nil
 			}
 			return nil, fmt.Errorf("failed to read override configuration %s: %w", envFilename, err)
@@ -150,5 +184,8 @@ func Load(env string) (*Config, error) {
 		}
 	}
 
+	if err := cfg.validate(); err != nil {
+		return nil, err
+	}
 	return &cfg, nil
 }

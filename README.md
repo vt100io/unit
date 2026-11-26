@@ -67,6 +67,9 @@ Requires Go 1.21+. The binary lands in `$(go env GOPATH)/bin`.
 name       = "api"
 executable = "bin/api"
 port       = 8080
+# listen   = "localhost" # default: 127.0.0.1 only, Caddy is the way in
+#          = "tailnet"   # tailscale0 only, for tailnet-only tools; no domain
+#          = "all"       # every interface, the public one too
 
 [sandbox]
 allow_outbound_network = true
@@ -94,6 +97,20 @@ user = "deploy"
 domain  = "api.example.com"
 secrets = "./secrets.prod.sh"
 ```
+
+### Where the port listens
+
+By default the socket binds `127.0.0.1` only, so a port is never on the public
+interface by accident; with a `domain`, Caddy on the same machine proxies to it.
+`listen = "tailnet"` binds the `tailscale0` interface instead, for a service the
+tailnet reaches directly and nothing else does. `listen = "all"` binds every
+interface, which leaves only a cloud firewall between the port and the internet.
+
+With a `domain`, unit writes a Caddy site that proxies to `127.0.0.1:<port>` and
+adds `Strict-Transport-Security` (one year, without `includeSubDomains`),
+`X-Content-Type-Options: nosniff` and `Referrer-Policy:
+strict-origin-when-cross-origin`, and drops Caddy's `Server` header. Framing and
+content security policy depend on the app, so the app sets those itself.
 
 ---
 

@@ -49,3 +49,54 @@ func TestAllowSystemStats(t *testing.T) {
 		}
 	}
 }
+
+// A port without a domain must not end up on the public interface by
+// accident: the default is loopback, and only "all" binds everywhere.
+func TestSocketListen(t *testing.T) {
+	cases := []struct {
+		listen string
+		want   []string
+		absent []string
+	}{
+		{"", []string{"ListenStream=127.0.0.1:5001\n"}, []string{"BindToDevice"}},
+		{config.ListenLocalhost, []string{"ListenStream=127.0.0.1:5001\n"}, []string{"BindToDevice"}},
+		{config.ListenTailnet, []string{"ListenStream=5001\n", "BindToDevice=tailscale0\n"}, []string{"127.0.0.1"}},
+		{config.ListenAll, []string{"ListenStream=5001\n"}, []string{"BindToDevice", "127.0.0.1"}},
+	}
+	for _, c := range cases {
+		socket := render(t, SocketTemplate, &config.Config{Name: "app", Port: 5001, Listen: c.listen})
+		for _, w := range c.want {
+			if !strings.Contains(socket, w) {
+				t.Errorf("listen=%q: socket lacks %q:\n%s", c.listen, w, socket)
+			}
+		}
+		for _, a := range c.absent {
+			if strings.Contains(socket, a) {
+				t.Errorf("listen=%q: socket has %q:\n%s", c.listen, a, socket)
+			}
+		}
+	}
+}
+
+// Caddy must dial the address the socket binds, and send the headers.
+func TestCaddySnippet(t *testing.T) {
+	snippet := render(t, CaddySnippetTemplate, struct {
+		Domain string
+		Port   int
+	}{"example.com, www.example.com", 5001})
+	for _, w := range []string{
+		"example.com, www.example.com {",
+		"reverse_proxy 127.0.0.1:5001",
+		`Strict-Transport-Security "max-age=31536000"`,
+		`X-Content-Type-Options "nosniff"`,
+		`Referrer-Policy "strict-origin-when-cross-origin"`,
+		"-Server",
+	} {
+		if !strings.Contains(snippet, w) {
+			t.Errorf("snippet lacks %q:\n%s", w, snippet)
+		}
+	}
+	if strings.Contains(snippet, "localhost") {
+		t.Errorf("snippet dials localhost, which may resolve to ::1:\n%s", snippet)
+	}
+}

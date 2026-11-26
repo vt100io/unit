@@ -102,7 +102,17 @@ const SocketTemplate = `[Unit]
 Description=Unit Socket: {{.Name}}
 
 [Socket]
+{{- if eq .Listen "all"}}
+# Every interface, the public one too.
 ListenStream={{.Port}}
+{{- else if eq .Listen "tailnet"}}
+# The tailnet only; systemd waits for tailscale0 to exist.
+ListenStream={{.Port}}
+BindToDevice=tailscale0
+{{- else}}
+# Loopback only: Caddy on this machine is the way in.
+ListenStream=127.0.0.1:{{.Port}}
+{{- end}}
 NoDelay=true
 
 [Install]
@@ -199,7 +209,19 @@ WantedBy=timers.target
 `
 
 // CaddySnippetTemplate is the Caddy reverse proxy configuration template.
+//
+// The app listens on 127.0.0.1 (see SocketTemplate), so Caddy dials that
+// rather than "localhost", which may resolve to ::1 first. The headers are
+// safe for any app: HSTS without includeSubDomains or preload, so no other
+// host under the domain is committed to HTTPS; no X-Frame-Options or CSP,
+// which depend on what the app embeds and is embedded in.
 const CaddySnippetTemplate = `{{.Domain}} {
-    reverse_proxy localhost:{{.Port}}
+	header {
+		Strict-Transport-Security "max-age=31536000"
+		X-Content-Type-Options "nosniff"
+		Referrer-Policy "strict-origin-when-cross-origin"
+		-Server
+	}
+	reverse_proxy 127.0.0.1:{{.Port}}
 }
 `
